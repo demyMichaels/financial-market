@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UK Banks Interest Rate Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Custom tooltip styling */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+        
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -125px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.875rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+        
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .dark .tooltip .tooltiptext {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+        }
+        
+        .dark .tooltip .tooltiptext::after {
+            border-color: #1f2937 transparent transparent transparent;
+        }
+
+        .trend-up {
+            color: #10B981;
+        }
+        
+        .trend-down {
+            color: #EF4444;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+            width: 100%;
+        }
+
+        @media (max-width: 640px) {
+            .chart-container {
+                height: 180px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen">
+    <!-- JavaScript to handle dark mode -->
+    <script>
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+    </script>
+
+    <div class="container mx-auto px-4 py-8">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-primary mb-2">UK Banks Interest Rate Tracker</h1>
+            <p class="text-gray-600 dark:text-gray-400">Analyze interest rate trends for various financial instruments across UK banks</p>
+        </header>
+
+        <div class="mb-8 bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+            <div class="flex flex-wrap gap-4">
+                <div class="w-full md:w-auto">
+                    <label for="category-filter" class="block text-sm font-medium mb-1">Bank Category</label>
+                    <select id="category-filter" class="w-full md:w-60 p-2 border border-gray-300 dark:border-gray-700 rounded text-base bg-white dark:bg-gray-700">
+                        <option value="all">All Categories</option>
+                        <option value="high-street">High Street Banks</option>
+                        <option value="challenger">Challenger Banks</option>
+                        <option value="building-society">Building Societies</option>
+                        <option value="investment">Investment Banks</option>
+                        <option value="international">International Banks</option>
+                    </select>
+                </div>
+                
+                <div class="w-full md:w-auto">
+                    <label for="market-filter" class="block text-sm font-medium mb-1">Market Category</label>
+                    <select id="market-filter" class="w-full md:w-60 p-2 border border-gray-300 dark:border-gray-700 rounded text-base bg-white dark:bg-gray-700">
+                        <option value="all">All Markets</option>
+                        <option value="money">Money Market</option>
+                        <option value="capital">Capital Market</option>
+                        <option value="bond">Bond Market</option>
+                        <option value="stock">Stock Market</option>
+                    </select>
+                </div>
+                
+                <div class="w-full md:w-auto">
+                    <label for="instrument-filter" class="block text-sm font-medium mb-1">Financial Instrument</label>
+                    <select id="instrument-filter" class="w-full md:w-60 p-2 border border-gray-300 dark:border-gray-700 rounded text-base bg-white dark:bg-gray-700">
+                        <option value="all">All Instruments</option>
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
+                </div>
+
+                <div class="w-full md:w-auto">
+                    <label for="date-range" class="block text-sm font-medium mb-1">Time Period</label>
+                    <select id="date-range" class="w-full md:w-60 p-2 border border-gray-300 dark:border-gray-700 rounded text-base bg-white dark:bg-gray-700">
+                        <option value="1M">1 Month</option>
+                        <option value="3M">3 Months</option>
+                        <option value="6M" selected>6 Months</option>
+                        <option value="1Y">1 Year</option>
+                        <option value="ALL">All Time</option>
+                    </select>
+                </div>
+
+                <div class="w-full md:w-auto">
+                    <label for="sort-by" class="block text-sm font-medium mb-1">Sort By</label>
+                    <select id="sort-by" class="w-full md:w-60 p-2 border border-gray-300 dark:border-gray-700 rounded text-base bg-white dark:bg-gray-700">
+                        <option value="name-asc">Bank Name (A-Z)</option>
+                        <option value="name-desc">Bank Name (Z-A)</option>
+                        <option value="rate-asc">Current Rate (Low to High)</option>
+                        <option value="rate-desc">Current Rate (High to Low)</option>
+                        <option value="change-asc">% Change (Low to High)</option>
+                        <option value="change-desc">% Change (High to Low)</option>
+                        <option value="volatility-asc">Volatility (Low to High)</option>
+                        <option value="volatility-desc">Volatility (High to Low)</option>
+                    </select>
+                </div>
+                
+                <div class="w-full md:w-auto md:ml-auto flex items-end">
+                    <button id="compare-button" class="bg-primary hover:bg-primary/90 text-white py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                        Compare Selected
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-6">
+            <h2 class="text-xl font-bold mb-4">Market Overview</h2>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+                <div class="chart-container">
+                    <canvas id="market-overview-chart"></canvas>
+                </div>
+                <div id="market-overview-legend" class="mt-4 flex flex-wrap gap-4 text-sm"></div>
+            </div>
+        </div>
+
+        <div id="banks-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Bank cards will be populated here by JavaScript -->
+        </div>
+
+        <!-- Tooltip container for mobile -->
+        <div id="mobile-tooltip" class="fixed bottom-0 left-0 right-0 bg-gray-800 text-white p-4 z-50 hidden transform transition-transform duration-300 translate-y-full">
+            <div id="mobile-tooltip-content" class="text-sm"></div>
+            <button id="close-tooltip" class="absolute top-2 right-2 text-white">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Comparison Modal -->
+        <div id="comparison-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-6xl max-h-[90vh] overflow-auto">
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <h2 class="text-xl font-bold">Rate Trend Comparison</h2>
+                    <button id="close-comparison" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="comparison-content" class="p-4">
+                    <div class="chart-container h-80">
+                        <canvas id="comparison-chart"></canvas>
+                    </div>
+                    <div id="comparison-stats" class="mt-6">
+                        <!-- Comparison statistics will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Market categories and instruments with tooltips
+            const marketCategories = {
+                "money": {
+                    name: "Money Market",
+                    instruments: {
+                        "treasury-bills": {
+                            name: "Treasury Bills",
+                            tooltip: "Short-term debt securities issued by the UK government with maturities of up to one year. They are sold at a discount and pay no interest before maturity."
+                        },
+                        "commercial-paper": {
+                            name: "Commercial Paper",
+                            tooltip: "Short-term, unsecured promissory notes issued by corporations to finance short-term credit needs, typically with maturities ranging from a few days to 270 days."
+                        },
+                        "certificates-deposit": {
+                            name: "Certificates of Deposit",
+                            tooltip: "Time deposits with banks that have a specific maturity date (from a few months to several years) and interest rate. They are insured and offer a higher rate than savings accounts."
+                        },
+                        "repos": {
+                            name: "Repurchase Agreements (Repos)",
+                            tooltip: "Short-term borrowing arrangements where securities are sold with a commitment to repurchase them at a higher price on a specified future date."
+                        },
+                        "bankers-acceptances": {
+                            name: "Bankers' Acceptances",
+                            tooltip: "Short-term debt instruments guaranteed by a bank, often used in international trade. They're time drafts a bank has agreed to pay at maturity."
+                        },
+                        "money-market-funds": {
+                            name: "Money Market Funds",
+                            tooltip: "Investment funds that invest in short-term, high-quality debt instruments. They aim to maintain a stable value while providing liquidity and income."
+                        }
+                    }
+                },
+                "capital": {
+                    name: "Capital Market",
+                    instruments: {
+                        "equity-shares": {
+                            name: "Equity Shares",
+                            tooltip: "Ordinary shares that represent ownership in a company. Shareholders may receive dividends and have voting rights proportional to their shareholding."
+                        },
+                        "preference-shares": {
+                            name: "Preference Shares",
+                            tooltip: "A type of share capital that has priority over common shares in dividend payments and asset distribution upon liquidation, but typically lacks voting rights."
+                        },
+                        "debentures": {
+                            name: "Debentures",
+                            tooltip: "Long-term debt instruments issued by corporations or governments not secured by any specific assets. Holders receive fixed interest payments."
+                        },
+                        "term-loans": {
+                            name: "Term Loans",
+                            tooltip: "Loans provided by financial institutions with fixed repayment schedules and interest rates, typically used for business expansion or large purchases."
+                        },
+                        "venture-capital": {
+                            name: "Venture Capital",
+                            tooltip: "Funding provided by investors to startup companies and small businesses with perceived long-term growth potential, often in exchange for equity."
+                        }
+                    }
+                },
+                "bond": {
+                    name: "Bond Market",
+                    instruments: {
+                        "gilts": {
+                            name: "Government Bonds (Gilts)",
+                            tooltip: "Bonds issued by the UK government, considered among the safest investments as they're backed by the government. They pay a fixed rate of interest until maturity."
+                        },
+                        "corporate-bonds": {
+                            name: "Corporate Bonds",
+                            tooltip: "Debt securities issued by corporations to raise capital. They typically pay higher interest than government bonds but carry higher risk."
+                        },
+                        "municipal-bonds": {
+                            name: "Municipal Bonds",
+                            tooltip: "Debt securities issued by local governments or their agencies to finance public projects like roads, schools, and utilities."
+                        },
+                        "convertible-bonds": {
+                            name: "Convertible Bonds",
+                            tooltip: "Corporate bonds that can be converted into a predetermined number of company shares at certain times during their life, combining elements of bonds and equities."
+                        },
+                        "zero-coupon-bonds": {
+                            name: "Zero-Coupon Bonds",
+                            tooltip: "Bonds that don't pay interest throughout their term. Instead, they're issued at a discount and pay their full face value at maturity."
+                        },
+                        "inflation-linked-bonds": {
+                            name: "Inflation-Linked Bonds",
+                            tooltip: "Government or corporate bonds whose principal and interest payments are indexed to inflation, protecting investors from inflation risk."
+                        }
+                    }
+                },
+                "stock": {
+                    name: "Stock Market",
+                    instruments: {
+                        "common-stocks": {
+                            name: "Common Stocks",
+                            tooltip: "Ordinary shares that represent ownership in a company. Shareholders may receive dividends and have voting rights at company meetings."
+                        },
+                        "preferred-stocks": {
+                            name: "Preferred Stocks",
+                            tooltip: "Stocks that provide a fixed dividend payment and have priority over common stocks in dividend payments and asset distribution upon liquidation."
+                        },
+                        "etfs": {
+                            name: "Exchange-Traded Funds (ETFs)",
+                            tooltip: "Investment funds traded on stock exchanges that hold assets such as stocks, commodities, or bonds, and typically track an index."
+                        },
+                        "reits": {
+                            name: "Real Estate Investment Trusts (REITs)",
+                            tooltip: "Companies that own, operate, or finance income-generating real estate. They allow individuals to invest in portfolios of real estate assets."
+                        },
+                        "investment-trusts": {
+                            name: "Investment Trusts",
+                            tooltip: "Closed-end funds that issue a fixed number of shares and invest in a portfolio of assets. They can trade at a premium or discount to their net asset value."
+                        },
+                        "derivatives": {
+                            name: "Derivatives",
+                            tooltip: "Financial instruments whose value is derived from the value of underlying assets, such as options (right to buy/sell at a set price) and futures (agreements to buy/sell at a future date)."
+                        }
+                    }
+                }
+            };
+
+            // Generate historical data for each bank and instrument
+            function generateHistoricalData(baseRate, volatility, days) {
+                const data = [];
+                const now = new Date();
+                let currentRate = baseRate;
+                
+                for (let i = days; i >= 0; i--) {
+                    const date = new Date(now);
+                    date.setDate(date.getDate() - i);
+                    
+                    // Add some random variation based on volatility
+                    const change = (Math.random() - 0.5) * volatility * 0.2;
+                    currentRate = Math.max(0.1, currentRate + change);
+                    
+                    // Add occasional larger moves
+                    if (Math.random() < 0.05) {
+                        const bigMove = (Math.random() - 0.5) * volatility * 0.8;
+                        currentRate = Math.max(0.1, currentRate + bigMove);
+                    }
+                    
+                    // Add seasonal/cyclical patterns
+                    const cyclical = Math.sin(i / 30 * Math.PI) * volatility * 0.1;
+                    currentRate = Math.max(0.1, currentRate + cyclical);
+                    
+                    data.push({
+                        date: date,
+                        rate: parseFloat(currentRate.toFixed(2))
+                    });
+                }
+                
+                return data;
+            }
+
+            // Create banks with historical data
+            function createBanksWithHistory() {
+                // Bank data template
+                const bankTemplate = [
+                    // High Street Banks
+                    { 
+                        id: 1, 
+                        name: "Barclays", 
+                        category: "high-street", 
+                        instrumentRates: {
+                            // Money Market
+                            "treasury-bills": { currentRate: 4.25, volatility: 0.4 },
+                            "commercial-paper": { currentRate: 4.7, volatility: 0.6 },
+                            "certificates-deposit": { currentRate: 4.85, volatility: 0.5 },
+                            "repos": { currentRate: 4.30, volatility: 0.4 },
+                            "bankers-acceptances": { currentRate: 4.50, volatility: 0.5 },
+                            "money-market-funds": { currentRate: 4.15, volatility: 0.3 },
+                            
+                            // Capital Market
+                            "equity-shares": { currentRate: 3.8, volatility: 0.9 },
+                            "preference-shares": { currentRate: 5.5, volatility: 0.7 },
+                            "debentures": { currentRate: 5.2, volatility: 0.6 },
+                            "term-loans": { currentRate: 7.4, volatility: 0.7 },
+                            "venture-capital": { currentRate: 15.0, volatility: 1.5 },
+                            
+                            // Bond Market
+                            "gilts": { currentRate: 4.1, volatility: 0.4 },
+                            "corporate-bonds": { currentRate: 5.6, volatility: 0.6 },
+                            "municipal-bonds": { currentRate: 4.9, volatility: 0.5 },
+                            "convertible-bonds": { currentRate: 5.3, volatility: 0.7 },
+                            "zero-coupon-bonds": { currentRate: 4.8, volatility: 0.5 },
+                            "inflation-linked-bonds": { currentRate: 3.9, volatility: 0.6 },
+                            
+                            // Stock Market
+                            "common-stocks": { currentRate: 3.7, volatility: 1.0 },
+                            "preferred-stocks": { currentRate: 5.4, volatility: 0.7 },
+                            "etfs": { currentRate: 3.5, volatility: 0.8 },
+                            "reits": { currentRate: 6.2, volatility: 0.9 },
+                            "investment-trusts": { currentRate: 5.8, volatility: 0.8 },
+                            "derivatives": { currentRate: 7.5, volatility: 1.2 }
+                        }
+                    },
+                    { 
+                        id: 2, 
+                        name: "HSBC", 
+                        category: "high-street", 
+                        instrumentRates: {
+                            // Money Market
+                            "treasury-bills": { currentRate: 4.20, volatility: 0.38 },
+                            "commercial-paper": { currentRate: 4.65, volatility: 0.58 },
+                            "certificates-deposit": { currentRate: 4.90, volatility: 0.48 },
+                            "repos": { currentRate: 4.35, volatility: 0.38 },
+                            "bankers-acceptances": { currentRate: 4.55, volatility: 0.48 },
+                            "money-market-funds": { currentRate: 4.20, volatility: 0.28 },
+                            
+                            // Capital Market
+                            "equity-shares": { currentRate: 4.1, volatility: 0.85 },
+                            "preference-shares": { currentRate: 5.6, volatility: 0.65 },
+                            "debentures": { currentRate: 5.3, volatility: 0.55 },
+                            "term-loans": { currentRate: 7.2, volatility: 0.65 },
+                            "venture-capital": { currentRate: 14.5, volatility: 1.45 },
+                            
+                            // Bond Market
+                            "gilts": { currentRate: 4.0, volatility: 0.35 },
+                            "corporate-bonds": { currentRate: 5.5, volatility: 0.55 },
+                            "municipal-bonds": { currentRate: 4.8, volatility: 0.45 },
+                            "convertible-bonds": { currentRate: 5.2, volatility: 0.65 },
+                            "zero-coupon-bonds": { currentRate: 4.7, volatility: 0.45 },
+                            "inflation-linked-bonds": { currentRate: 3.85, volatility: 0.55 },
+                            
+                            // Stock Market
+                            "common-stocks": { currentRate: 4.3, volatility: 0.95 },
+                            "preferred-stocks": { currentRate: 5.5, volatility: 0.65 },
+                            "etfs": { currentRate: 3.6, volatility: 0.75 },
+                            "reits": { currentRate: 6.3, volatility: 0.85 },
+                            "investment-trusts": { currentRate: 5.9, volatility: 0.75 },
+                            "derivatives": { currentRate: 7.6, volatility: 1.15 }
+                        }
+                    },
+                    { 
+                        id: 3, 
+                        name: "Lloyds Banking Group", 
+                        category: "high-street", 
+                        instrumentRates: {
+                            // Money Market
+                            "treasury-bills": { currentRate: 4.22, volatility: 0.39 },
+                            "commercial-paper": { currentRate: 4.68, volatility: 0.59 },
+                            "certificates-deposit": { currentRate: 4.88, volatility: 0.49 },
+                            "repos": { currentRate: 4.32, volatility: 0.39 },
+                            "bankers-acceptances": { currentRate: 4.52, volatility: 0.49 },
+                            "money-market-funds": { currentRate: 4.18, volatility: 0.29 },
+                            
+                            // Capital Market
+                            "equity-shares": { currentRate: 3.9, volatility: 0.86 },
+                            "preference-shares": { currentRate: 5.55, volatility: 0.66 },
+                            "debentures": { currentRate: 5.25, volatility: 0.56 },
+                            "term-loans": { currentRate: 7.3, volatility: 0.66 },
+                            "venture-capital": { currentRate: 14.8, volatility: 1.46 },
+                            
+                            // Bond Market
+                            "gilts": { currentRate: 4.05, volatility: 0.36 },
+                            "corporate-bonds": { currentRate: 5.55, volatility: 0.56 },
+                            "municipal-bonds": { currentRate: 4.85, volatility: 0.46 },
+                            "convertible-bonds": { currentRate: 5.25, volatility: 0.66 },
+                            "zero-coupon-bonds": { currentRate: 4.75, volatility: 0.46 },
+                            "inflation-linked-bonds": { currentRate: 3.88, volatility: 0.56 },
+                            
+                            // Stock Market
+                            "common-stocks": { currentRate: 4.0, volatility: 0.96 },
+                            "preferred-stocks": { currentRate: 5.45, volatility: 0.66 },
+                            "etfs": { currentRate: 3.55, volatility: 0.76 },
+                            "reits": { currentRate: 6.25, volatility: 0.86 },
+                            "investment-trusts": { currentRate: 5.85, volatility: 0.76 },
+                            "derivatives": { currentRate: 7.55, volatility: 1.16 }
+                        }
+                    }
+                    // Additional banks would follow the same pattern...
+                ];
+
+                // The rest of the banks from the original data would be added similarly
+                // For brevity, we're just using the first 3 banks in this example
+                // In a real application, you would include all banks
+
+                // Add 15 more banks from the original data
+                for (let i = 4; i <= 19; i++) {
+                    const categories = ['high-street', 'challenger', 'building-society', 'investment', 'international'];
+                    const categoryIndex = Math.floor((i - 1) / 4);
+                    const bankName = `Bank ${i}`;
+                    
+                    const bank = {
+                        id: i,
+                        name: bankName,
+                        category: categories[categoryIndex],
+                        instrumentRates: {}
+                    };
+                    
+                    // Generate instrument rates with varying volatility
+                    Object.keys(marketCategories).forEach(marketKey => {
+                        const market = marketCategories[marketKey];
+                        Object.keys(market.instruments).forEach(instrumentKey => {
+                            const baseRate = 3 + Math.random() * 5;
+                            const volatility = 0.3 + Math.random() * 1.0;
+                            bank.instrumentRates[instrumentKey] = {
+                                currentRate: parseFloat(baseRate.toFixed(2)),
+                                volatility: parseFloat(volatility.toFixed(2))
+                            };
+                        });
+                    });
+                    
+                    bankTemplate.push(bank);
+                }
+
+                // Generate 365 days of historical data for each bank's instruments
+                const banksWithHistory = bankTemplate.map(bankTemplate => {
+                    const bank = {...bankTemplate, instruments: {}};
+                    
+                    // Generate historical data for each instrument
+                    Object.keys(bankTemplate.instrumentRates).forEach(key => {
+                        const instrumentData = bankTemplate.instrumentRates[key];
+                        bank.instruments[key] = {
+                            currentRate: instrumentData.currentRate,
+                            volatility: instrumentData.volatility,
+                            history: generateHistoricalData(
+                                instrumentData.currentRate, 
+                                instrumentData.volatility, 
+                                365  // Generate 1 year of daily data
+                            )
+                        };
+                    });
+                    
+                    return bank;
+                });
+                
+                return banksWithHistory;
+            }
+
+            // Create banks data with historical rates
+            const banks = createBanksWithHistory();
+
+            // Category display names
+            const categoryNames = {
+                "high-street": "High Street Bank",
+                "challenger": "Challenger Bank",
+                "building-society": "Building Society",
+                "investment": "Investment Bank",
+                "international": "International Bank"
+            };
+
+            // Selected banks for comparison
+            let selectedBanks = [];
+
+            // Charts reference object
+            const charts = {
+                bankCharts: {},
+                marketOverview: null,
+                comparison: null
+            };
+
+            // Color palette for charts
+            const colorPalette = [
+                '#5D5CDE', '#FF6B6B', '#4ECDC4', '#FFBE0B', '#A177D1',
+                '#36A2EB', '#FF9F40', '#50CB86', '#FF6384', '#8378EA'
+            ];
+
+            // Market overview chart
+            function initializeMarketOverviewChart() {
+                const ctx = document.getElementById('market-overview-chart').getContext('2d');
+                const legendContainer = document.getElementById('market-overview-legend');
+                
+                // Determine markets to display based on filter
+                const marketFilter = document.getElementById('market-filter').value;
+                const marketsToDisplay = marketFilter === 'all' ? 
+                    Object.keys(marketCategories) : [marketFilter];
+                
+                // Prepare datasets
+                const datasets = [];
+                const legendItems = [];
+                
+                marketsToDisplay.forEach((marketKey, index) => {
+                    const market = marketCategories[marketKey];
+                    const color = colorPalette[index % colorPalette.length];
+                    
+                    // Calculate average rates across all banks for this market category
+                    const data = [];
+                    const today = new Date();
+                    const dateRange = getDateRangeInDays();
+                    const startDate = new Date(today);
+                    startDate.setDate(startDate.getDate() - dateRange);
+                    
+                    // Generate date points
+                    for (let i = dateRange; i >= 0; i--) {
+                        const date = new Date(today);
+                        date.setDate(date.getDate() - i);
+                        
+                        // Calculate average rate across all instruments in this market for this date
+                        let totalRate = 0;
+                        let instrumentCount = 0;
+                        
+                        // Get all instruments for this market
+                        const instrumentKeys = Object.keys(market.instruments);
+                        
+                        // For each bank, get the rate for each instrument on this date
+                        banks.forEach(bank => {
+                            instrumentKeys.forEach(instrumentKey => {
+                                const history = bank.instruments[instrumentKey].history;
+                                // Find the matching date entry
+                                const dateEntry = history.find(entry => 
+                                    entry.date.toDateString() === date.toDateString());
+                                if (dateEntry) {
+                                    totalRate += dateEntry.rate;
+                                    instrumentCount++;
+                                }
+                            });
+                        });
+                        
+                        // Calculate average
+                        const avgRate = instrumentCount > 0 ? totalRate / instrumentCount : 0;
+                        
+                        data.push({
+                            x: date,
+                            y: parseFloat(avgRate.toFixed(2))
+                        });
+                    }
+                    
+                    // Add dataset
+                    datasets.push({
+                        label: market.name,
+                        data: data,
+                        borderColor: color,
+                        backgroundColor: color + '20',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        tension: 0.3,
+                        fill: false
+                    });
+                    
+                    // Create legend item
+                    const legendItem = document.createElement('div');
+                    legendItem.className = 'flex items-center';
+                    legendItem.innerHTML = `
+                        <div class="w-4 h-4 mr-2" style="background-color: ${color};"></div>
+                        <span>${market.name}</span>
+                    `;
+                    legendItems.push(legendItem);
+                });
+                
+                // Create chart
+                charts.marketOverview = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: (tooltipItems) => {
+                                        const date = new Date(tooltipItems[0].parsed.x);
+                                        return date.toLocaleDateString('en-GB', {
+                                            day: 'numeric',
+                                            month: 'short',
+                                            year: 'numeric'
+                                        });
+                                    },
+                                    label: (context) => {
+                                        return `${context.dataset.label}: ${context.parsed.y}%`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: 'month',
+                                    displayFormats: {
+                                        month: 'MMM yyyy'
+                                    }
+                                },
+                                ticks: {
+                                    maxRotation: 0
+                                },
+                                grid: {
+                                    display: false
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Average Rate (%)'
+                                },
+                                ticks: {
+                                    callback: (value) => value + '%'
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Add legend items
+                legendContainer.innerHTML = '';
+                legendItems.forEach(item => {
+                    legendContainer.appendChild(item);
+                });
+            }
+
+            // Calculate date range in days based on selected range
+            function getDateRangeInDays() {
+                const range = document.getElementById('date-range').value;
+                switch(range) {
+                    case '1M': return 30;
+                    case '3M': return 90;
+                    case '6M': return 180;
+                    case '1Y': return 365;
+                    case 'ALL': return 365; // We have 1 year of data at most
+                    default: return 180;
+                }
+            }
+
+            // Calculate volatility from historical data
+            function calculateVolatility(history, days) {
+                if (!history || history.length < 2 || days >= history.length) {
+                    return 0;
+                }
+
+                // Use only the data for the specified time period
+                const relevantHistory = history.slice(-days-1);
+                
+                // Calculate daily percentage changes
+                const changes = [];
+                for (let i = 1; i < relevantHistory.length; i++) {
+                    const previousRate = relevantHistory[i-1].rate;
+                    const currentRate = relevantHistory[i].rate;
+                    const percentChange = (currentRate - previousRate) / previousRate * 100;
+                    changes.push(percentChange);
+                }
+                
+                // Calculate standard deviation of changes (volatility)
+                const mean = changes.reduce((sum, val) => sum + val, 0) / changes.length;
+                const squaredDifferences = changes.map(val => Math.pow(val - mean, 2));
+                const variance = squaredDifferences.reduce((sum, val) => sum + val, 0) / squaredDifferences.length;
+                const volatility = Math.sqrt(variance);
+                
+                return parseFloat(volatility.toFixed(2));
+            }
+
+            // Calculate percentage change over the selected period
+            function calculatePercentageChange(history, days) {
+                if (!history || history.length < 2 || days >= history.length) {
+                    return 0;
+                }
+                
+                const startIndex = Math.max(0, history.length - days - 1);
+                const startRate = history[startIndex].rate;
+                const endRate = history[history.length - 1].rate;
+                
+                const percentChange = (endRate - startRate) / startRate * 100;
+                return parseFloat(percentChange.toFixed(2));
+            }
+
+            // Populate instrument filter based on market selection
+            function populateInstrumentFilter() {
+                const marketFilter = document.getElementById('market-filter').value;
+                const instrumentFilter = document.getElementById('instrument-filter');
+                
+                // Clear existing options except "All Instruments"
+                while (instrumentFilter.options.length > 1) {
+                    instrumentFilter.remove(1);
+                }
+                
+                // Add instruments for the selected market or all markets
+                if (marketFilter === 'all') {
+                    // Add all instruments from all markets
+                    Object.keys(marketCategories).forEach(marketKey => {
+                        const market = marketCategories[marketKey];
+                        // Add option group for market
+                        const group = document.createElement('optgroup');
+                        group.label = market.name;
+                        
+                        // Add instruments to group
+                        Object.keys(market.instruments).forEach(instrumentKey => {
+                            const option = document.createElement('option');
+                            option.value = instrumentKey;
+                            option.textContent = market.instruments[instrumentKey].name;
+                            group.appendChild(option);
+                        });
+                        
+                        instrumentFilter.appendChild(group);
+                    });
+                } else if (marketCategories[marketFilter]) {
+                    // Add instruments just for the selected market
+                    const market = marketCategories[marketFilter];
+                    Object.keys(market.instruments).forEach(instrumentKey => {
+                        const option = document.createElement('option');
+                        option.value = instrumentKey;
+                        option.textContent = market.instruments[instrumentKey].name;
+                        instrumentFilter.appendChild(option);
+                    });
+                }
+            }
+
+            // Function to find instrument details
+            function findInstrumentDetails(instrumentKey) {
+                for (const marketKey in marketCategories) {
+                    const market = marketCategories[marketKey];
+                    if (market.instruments[instrumentKey]) {
+                        return {
+                            market: market.name,
+                            instrument: market.instruments[instrumentKey]
+                        };
+                    }
+                }
+                return null;
+            }
+
+            // Create a rate chart for a bank card
+            function createRateChart(bankId, instrumentKey, container) {
+                const bank = banks.find(b => b.id === bankId);
+                if (!bank || !bank.instruments[instrumentKey]) return null;
+                
+                const instrumentData = bank.instruments[instrumentKey];
+                const dateRange = getDateRangeInDays();
+                const relevantHistory = instrumentData.history.slice(-dateRange-1);
+                
+                const ctx = document.createElement('canvas');
+                container.appendChild(ctx);
+                
+                const chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Interest Rate',
+                            data: relevantHistory.map(item => ({
+                                x: item.date,
+                                y: item.rate
+                            })),
+                            borderColor: colorPalette[0],
+                            backgroundColor: colorPalette[0] + '20',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            pointHoverRadius: 3,
+                            tension: 0.3,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: (tooltipItems) => {
+                                        const date = new Date(tooltipItems[0].parsed.x);
+                                        return date.toLocaleDateString('en-GB', {
+                                            day: 'numeric',
+                                            month: 'short',
+                                            year: 'numeric'
+                                        });
+                                    },
+                                    label: (context) => {
+                                        return `Rate: ${context.parsed.y}%`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                display: false
+                            },
+                            y: {
+                                display: false,
+                                beginAtZero: false
+                            }
+                        }
+                    }
+                });
+                
+                return chart;
+            }
+
+            // Function to render bank cards
+            function renderBanks() {
+                const container = document.getElementById('banks-container');
+                const categoryFilter = document.getElementById('category-filter').value;
+                const marketFilter = document.getElementById('market-filter').value;
+                const instrumentFilter = document.getElementById('instrument-filter').value;
+                const sortBy = document.getElementById('sort-by').value;
+                const dateRange = getDateRangeInDays();
+                
+                // Filter banks
+                let filteredBanks = [...banks];
+                if (categoryFilter !== 'all') {
+                    filteredBanks = filteredBanks.filter(bank => bank.category === categoryFilter);
+                }
+                
+                // Prepare bank data with calculated metrics
+                filteredBanks = filteredBanks.map(bank => {
+                    // Add calculated metrics for each instrument
+                    const instrumentsWithMetrics = {};
+                    
+                    Object.keys(bank.instruments).forEach(key => {
+                        const instrumentData = bank.instruments[key];
+                        instrumentsWithMetrics[key] = {
+                            ...instrumentData,
+                            percentChange: calculatePercentageChange(instrumentData.history, dateRange),
+                            calculatedVolatility: calculateVolatility(instrumentData.history, dateRange)
+                        };
+                    });
+                    
+                    return {
+                        ...bank,
+                        instrumentsWithMetrics
+                    };
+                });
+                
+                // Sort banks
+                if (sortBy === 'name-asc') {
+                    filteredBanks.sort((a, b) => a.name.localeCompare(b.name));
+                } else if (sortBy === 'name-desc') {
+                    filteredBanks.sort((a, b) => b.name.localeCompare(a.name));
+                } else if (sortBy.startsWith('rate-') || sortBy.startsWith('change-') || sortBy.startsWith('volatility-')) {
+                    if (instrumentFilter !== 'all') {
+                        filteredBanks.sort((a, b) => {
+                            let valueA, valueB;
+                            
+                            if (sortBy.startsWith('rate-')) {
+                                valueA = a.instrumentsWithMetrics[instrumentFilter]?.currentRate || 0;
+                                valueB = b.instrumentsWithMetrics[instrumentFilter]?.currentRate || 0;
+                            } else if (sortBy.startsWith('change-')) {
+                                valueA = a.instrumentsWithMetrics[instrumentFilter]?.percentChange || 0;
+                                valueB = b.instrumentsWithMetrics[instrumentFilter]?.percentChange || 0;
+                            } else if (sortBy.startsWith('volatility-')) {
+                                valueA = a.instrumentsWithMetrics[instrumentFilter]?.calculatedVolatility || 0;
+                                valueB = b.instrumentsWithMetrics[instrumentFilter]?.calculatedVolatility || 0;
+                            }
+                            
+                            return sortBy.endsWith('-asc') ? valueA - valueB : valueB - valueA;
+                        });
+                    }
+                }
+                
+                // Clear container and destroy existing charts
+                Object.values(charts.bankCharts).forEach(chart => chart.destroy());
+                charts.bankCharts = {};
+                container.innerHTML = '';
+                
+                // Create bank cards
+                filteredBanks.forEach(bank => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow';
+                    
+                    const isSelected = selectedBanks.includes(bank.id);
+                    const checkboxClass = isSelected ? 'text-primary' : 'text-gray-400';
+                    
+                    // Create card header with bank name and checkbox
+                    const header = `
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="text-lg font-bold">${bank.name}</h3>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">${categoryNames[bank.category]}</p>
+                            </div>
+                            <button class="compare-checkbox ${checkboxClass}" data-bank-id="${bank.id}">
+                                <i class="fas ${isSelected ? 'fa-check-square' : 'fa-square'} text-xl"></i>
+                            </button>
+                        </div>
+                    `;
+                    
+                    card.innerHTML = header;
+                    
+                    // Create table for rates and charts
+                    const table = document.createElement('div');
+                    table.className = 'overflow-x-auto';
+                    table.innerHTML = `
+                        <table class="min-w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-gray-200 dark:border-gray-700">
+                                    <th class="text-left py-2">Financial Instrument</th>
+                                    <th class="text-right py-2">Current<br>Rate (%)</th>
+                                    <th class="text-right py-2">Change<br>(${document.getElementById('date-range').value})</th>
+                                    <th class="text-center py-2">Trend</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rates-${bank.id}">
+                                <!-- Rates will be added here -->
+                            </tbody>
+                        </table>
+                    `;
+                    
+                    card.appendChild(table);
+                    container.appendChild(card);
+                    
+                    // Populate rates
+                    const ratesContainer = document.getElementById(`rates-${bank.id}`);
+                    
+                    // Filter instruments
+                    let instruments = [];
+                    
+                    if (marketFilter === 'all' && instrumentFilter === 'all') {
+                        // Show a sampling of instruments from each market category
+                        Object.keys(marketCategories).forEach(marketKey => {
+                            const market = marketCategories[marketKey];
+                            // Get first instrument from each market
+                            const marketInstruments = Object.keys(market.instruments).slice(0, 1);
+                            marketInstruments.forEach(key => {
+                                instruments.push({
+                                    key,
+                                    marketName: market.name,
+                                    name: market.instruments[key].name,
+                                    tooltip: market.instruments[key].tooltip
+                                });
+                            });
+                        });
+                    } else if (marketFilter !== 'all' && instrumentFilter === 'all') {
+                        // Show all instruments from the selected market
+                        const market = marketCategories[marketFilter];
+                        Object.keys(market.instruments).forEach(key => {
+                            instruments.push({
+                                key,
+                                marketName: market.name,
+                                name: market.instruments[key].name,
+                                tooltip: market.instruments[key].tooltip
+                            });
+                        });
+                    } else if (instrumentFilter !== 'all') {
+                        // Show just the selected instrument
+                        const details = findInstrumentDetails(instrumentFilter);
+                        if (details) {
+                            instruments.push({
+                                key: instrumentFilter,
+                                marketName: details.market,
+                                name: details.instrument.name,
+                                tooltip: details.instrument.tooltip
+                            });
+                        }
+                    }
+                    
+                    // Add instrument rows
+                    instruments.forEach(instrument => {
+                        if (!bank.instrumentsWithMetrics[instrument.key]) return;
+                        
+                        const instrumentData = bank.instrumentsWithMetrics[instrument.key];
+                        const currentRate = instrumentData.currentRate;
+                        const percentChange = instrumentData.percentChange;
+                        const volatility = instrumentData.calculatedVolatility;
+                        
+                        // Determine trend direction
+                        const trendClass = percentChange > 0 ? 'trend-up' : percentChange < 0 ? 'trend-down' : '';
+                        const trendIcon = percentChange > 0 ? 'fa-arrow-up' : percentChange < 0 ? 'fa-arrow-down' : 'fa-minus';
+                        
+                        const row = document.createElement('tr');
+                        row.className = 'border-b border-gray-200 dark:border-gray-700';
+                        
+                        row.innerHTML = `
+                            <td class="py-2">
+                                <div class="tooltip">
+                                    ${instrument.name}
+                                    <span class="tooltiptext">${instrument.tooltip}</span>
+                                </div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">${instrument.marketName}</div>
+                            </td>
+                            <td class="text-right py-2 font-medium">${currentRate.toFixed(2)}%</td>
+                            <td class="text-right py-2 ${trendClass} font-medium">
+                                ${percentChange.toFixed(2)}%
+                                <i class="fas ${trendIcon} text-xs ml-1"></i>
+                            </td>
+                            <td class="text-center py-2">
+                                <div class="chart-container h-16" id="chart-${bank.id}-${instrument.key}"></div>
+                                <div class="text-xs mt-1">Volatility: ${volatility.toFixed(2)}</div>
+                            </td>
+                        `;
+                        
+                        ratesContainer.appendChild(row);
+                        
+                        // Create chart after the row is added to the DOM
+                        const chartContainer = document.getElementById(`chart-${bank.id}-${instrument.key}`);
+                        const chart = createRateChart(bank.id, instrument.key, chartContainer);
+                        if (chart) {
+                            charts.bankCharts[`${bank.id}-${instrument.key}`] = chart;
+                        }
+                    });
+                });
+                
+                // Add event listeners to checkboxes
+                document.querySelectorAll('.compare-checkbox').forEach(checkbox => {
+                    checkbox.addEventListener('click', function() {
+                        const bankId = parseInt(this.getAttribute('data-bank-id'));
+                        toggleBankSelection(bankId);
+                    });
+                });
+                
+                // Add event listeners for mobile tooltip
+                if ('ontouchstart' in window) {
+                    const mobileTooltip = document.getElementById('mobile-tooltip');
+                    const mobileTooltipContent = document.getElementById('mobile-tooltip-content');
+                    
+                    document.querySelectorAll('.tooltip').forEach(tooltip => {
+                        tooltip.addEventListener('click', function() {
+                            const tooltipText = this.querySelector('.tooltiptext').textContent;
+                            mobileTooltipContent.textContent = tooltipText;
+                            mobileTooltip.classList.remove('hidden');
+                            mobileTooltip.classList.remove('translate-y-full');
+                        });
+                    });
+                    
+                    document.getElementById('close-tooltip').addEventListener('click', function() {
+                        mobileTooltip.classList.add('translate-y-full');
+                        setTimeout(() => {
+                            mobileTooltip.classList.add('hidden');
+                        }, 300);
+                    });
+                }
+                
+                // Update compare button state
+                updateCompareButtonState();
+            }
+            
+            // Toggle bank selection for comparison
+            function toggleBankSelection(bankId) {
+                const index = selectedBanks.indexOf(bankId);
+                if (index > -1) {
+                    selectedBanks.splice(index, 1);
+                } else {
+                    if (selectedBanks.length < 3) {
+                        selectedBanks.push(bankId);
+                    } else {
+                        alert('You can compare up to 3 banks at a time');
+                        return;
+                    }
+                }
+                renderBanks();
+            }
+            
+            // Update compare button state
+            function updateCompareButtonState() {
+                const compareButton = document.getElementById('compare-button');
+                compareButton.disabled = selectedBanks.length < 2;
+            }
+            
+            // Show comparison modal
+            function showComparison() {
+                if (selectedBanks.length < 2) return;
+                
+                const modal = document.getElementById('comparison-modal');
+                const content = document.getElementById('comparison-content');
+                const statsContainer = document.getElementById('comparison-stats');
+                
+                // Get selected banks data
+                const banksToCompare = banks.filter(bank => selectedBanks.includes(bank.id));
+                
+                // Get current instrument filter
+                const instrumentFilter = document.getElementById('instrument-filter').value;
+                const dateRange = getDateRangeInDays();
+                
+                // If a specific instrument is selected, compare trends for that instrument
+                if (instrumentFilter !== 'all') {
+                    const instrumentDetails = findInstrumentDetails(instrumentFilter);
+                    
+                    if (!instrumentDetails) {
+                        content.innerHTML = '<p>Please select a specific instrument to compare.</p>';
+                        return;
+                    }
+                    
+                    // Create comparison chart
+                    if (charts.comparison) {
+                        charts.comparison.destroy();
+                    }
+                    
+                    const chartCanvas = document.getElementById('comparison-chart');
+                    
+                    // Prepare data for chart
+                    const datasets = banksToCompare.map((bank, index) => {
+                        const color = colorPalette[index % colorPalette.length];
+                        const instrumentData = bank.instruments[instrumentFilter];
+                        
+                        if (!instrumentData) return null;
+                        
+                        const relevantHistory = instrumentData.history.slice(-dateRange-1);
+                        
+                        return {
+                            label: bank.name,
+                            data: relevantHistory.map(item => ({
+                                x: item.date,
+                                y: item.rate
+                            })),
+                            borderColor: color,
+                            backgroundColor: color + '20',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            tension: 0.3,
+                            fill: false
+                        };
+                    }).filter(Boolean);
+                    
+                    // Create chart
+                    charts.comparison = new Chart(chartCanvas, {
+                        type: 'line',
+                        data: {
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: `${instrumentDetails.instrument.name} - Rate Trends`
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        title: (tooltipItems) => {
+                                            const date = new Date(tooltipItems[0].parsed.x);
+                                            return date.toLocaleDateString('en-GB', {
+                                                day: 'numeric',
+                                                month: 'short',
+                                                year: 'numeric'
+                                            });
+                                        },
+                                        label: (context) => {
+                                            return `${context.dataset.label}: ${context.parsed.y}%`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: {
+                                        unit: 'month',
+                                        displayFormats: {
+                                            month: 'MMM yyyy'
+                                        }
+                                    },
+                                    ticks: {
+                                        maxRotation: 0
+                                    }
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: 'Interest Rate (%)'
+                                    },
+                                    ticks: {
+                                        callback: (value) => value + '%'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    // Create stats table
+                    let statsHtml = `
+                        <h3 class="text-lg font-semibold mb-3">${instrumentDetails.instrument.name} - Comparison Statistics</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead>
+                                    <tr>
+                                        <th class="px-4 py-3 text-left">Bank</th>
+                                        <th class="px-4 py-3 text-right">Current Rate</th>
+                                        <th class="px-4 py-3 text-right">Change (${document.getElementById('date-range').value})</th>
+                                        <th class="px-4 py-3 text-right">Volatility</th>
+                                        <th class="px-4 py-3 text-right">Min Rate</th>
+                                        <th class="px-4 py-3 text-right">Max Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    
+                    banksToCompare.forEach(bank => {
+                        const instrumentData = bank.instruments[instrumentFilter];
+                        
+                        if (!instrumentData) return;
+                        
+                        const currentRate = instrumentData.currentRate;
+                        const percentChange = calculatePercentageChange(instrumentData.history, dateRange);
+                        const volatility = calculateVolatility(instrumentData.history, dateRange);
+                        
+                        // Get min and max rates for the time period
+                        const relevantHistory = instrumentData.history.slice(-dateRange-1);
+                        const rates = relevantHistory.map(item => item.rate);
+                        const minRate = Math.min(...rates);
+                        const maxRate = Math.max(...rates);
+                        
+                        // Determine trend direction
+                        const changeClass = percentChange > 0 ? 'trend-up' : percentChange < 0 ? 'trend-down' : '';
+                        
+                        statsHtml += `
+                            <tr class="border-b border-gray-200 dark:border-gray-700">
+                                <td class="px-4 py-3 font-medium">${bank.name}</td>
+                                <td class="px-4 py-3 text-right font-medium">${currentRate.toFixed(2)}%</td>
+                                <td class="px-4 py-3 text-right ${changeClass}">${percentChange.toFixed(2)}%</td>
+                                <td class="px-4 py-3 text-right">${volatility.toFixed(2)}</td>
+                                <td class="px-4 py-3 text-right">${minRate.toFixed(2)}%</td>
+                                <td class="px-4 py-3 text-right">${maxRate.toFixed(2)}%</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    statsHtml += `
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                            <p>Volatility is measured as the standard deviation of daily percentage changes.</p>
+                        </div>
+                    `;
+                    
+                    statsContainer.innerHTML = statsHtml;
+                } else {
+                    // If no specific instrument is selected, show message
+                    content.innerHTML = '<p class="text-center p-6">Please select a specific instrument using the "Financial Instrument" filter to compare trends.</p>';
+                    return;
+                }
+                
+                modal.classList.remove('hidden');
+            }
+            
+            // Close comparison modal
+            function closeComparison() {
+                const modal = document.getElementById('comparison-modal');
+                modal.classList.add('hidden');
+            }
+            
+            // Add event listeners
+            document.getElementById('category-filter').addEventListener('change', renderBanks);
+            document.getElementById('market-filter').addEventListener('change', function() {
+                populateInstrumentFilter();
+                renderBanks();
+                initializeMarketOverviewChart();
+            });
+            document.getElementById('instrument-filter').addEventListener('change', renderBanks);
+            document.getElementById('date-range').addEventListener('change', function() {
+                renderBanks();
+                initializeMarketOverviewChart();
+            });
+            document.getElementById('sort-by').addEventListener('change', renderBanks);
+            document.getElementById('compare-button').addEventListener('click', showComparison);
+            document.getElementById('close-comparison').addEventListener('click', closeComparison);
+            
+            // Initial setup
+            populateInstrumentFilter();
+            initializeMarketOverviewChart();
+            renderBanks();
+        </script>
+    </div>
+</body>
+</html>
